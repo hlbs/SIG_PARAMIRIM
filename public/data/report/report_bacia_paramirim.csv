@@ -1,0 +1,55 @@
+﻿Parameter;Value;Unit;Interpretation
+Área da Bacia (A);17067.98;km²;Bacia grande
+Perímetro (P);1062.53;km;Perímetro da bacia
+Comprimento da Bacia (Lb);258.19;km;Comprimento da bacia
+Largura da Bacia (B);66.11;km;Largura da bacia
+Relevo (H);1622;m;Relevo muito alto, indicando terreno montanhoso
+Elevação Média;736.01;n.s.m.;Elevação média da bacia
+Elevação Mínima;400;n.s.m.;Elevação mínima da bacia
+Elevação Máxima;2022;n.s.m.;Elevação máxima da bacia
+Elevação Inicial (Canal Principal);673.11;n.s.m.;Elevação no início do canal principal
+Elevação Final (Canal Principal);409;n.s.m.;Elevação no final do canal principal
+Declividade média da Bacia (graus);5.82;graus;Íngreme
+Declividade média da Bacia (porcentagem);10.18;%;Íngreme
+Declividade do Canal Principal (Pontos Finais);0.07;%;Declive muito suave
+Declividade Compensada do Canal;0;m/m;Declive compensado do canal calculado por regressão linear
+Declividade Compensada do Canal (%);0.05;%;Declive compensado muito suave
+Densidade de Drenagem (Dd);0.12;km/km²;Textura de drenagem muito grossa
+Frequência da Corrente (Fs);0.01;streams/km²;Baixa frequência de fluxo
+Razão de Alongamento (Re);0.57;;Formato oval
+Razão de Circularidade (Rc);0.19;;Formato fortemente alongado
+Coeficiente de Compactação de Gravelius (Kc);2.29;;Formato retangular-oblongo
+Fator de Forma (Ff);0.26;;Formato alongado, baixa suscetibilidade a inundações repentinas
+Fator de Forma de Horton;0.26;;Formato alongado da bacia
+Razão de Alongamento de Schumm;0.57;;Bacia alongada
+Comprimento do Fluxo Superficial (Lo);4.08;km;Longo comprimento do escoamento superficial, indicando baixa densidade de drenagem
+Constante de Manutenção do Canal (C);8.16;km²/km;Alta constante de manutenção do canal, indicando baixa densidade de drenagem
+Número de Rugosidade (Rn);0.2;;Baixa rugosidade
+Tempo de Concentração - Kirpich (Tc);103.4;horas;Longo tempo de concentração, indicando resposta lenta à precipitação
+Tempo de Concentração - Kerby (Tc);10.54;horas;Longo tempo de concentração, indicando resposta lenta à precipitação
+Tempo de Concentração - Giandotti (Tc);33.57;horas;Longo tempo de concentração, indicando resposta lenta à precipitação
+Tempo de Concentração - Témez (Tc);6.81;horas;Longo tempo de concentração, indicando resposta lenta à precipitação Chuva
+Tempo de Concentração - USDA (Tc);266.99;horas;Longo tempo de concentração, indicando resposta lenta à chuva
+Tempo de Concentração - Passini (Tc);1986.4;horas;Longo tempo de concentração, indicando resposta lenta à chuva
+Tempo de Concentração - Ventura-Heras (Tc);5261.54;horas;Longo tempo de concentração, indicando resposta lenta à chuva
+Tempo de Concentração - Bransby-Williams (Tc);36.62;horas;Longo tempo de concentração, indicando resposta lenta à chuva
+Tempo de Concentração - Johnstone-Cross (Tc);54.72;horas;Longo tempo de concentração, indicando resposta lenta à chuva
+Tempo de Concentração - Clark (Tc);119.98;horas;Longo tempo de concentração, indicando resposta lenta à chuva
+Razão de Bifurcação (Rb);2.24;;Baixa razão de bifurcação, indicando litologia uniforme e declives suaves
+Ordem dos Fluxos;4;;Maior ordem de fluxo (Strahler): 4
+Comprimento Médio do Fluxo (Lm);10.62;km;Comprimento médio dos fluxos
+Intensidade de Drenagem (Id);0.09;;Baixa intensidade de drenagem
+Gradiente do Canal Principal;4.35;m/km;Canal com alto gradiente
+Sinuosidade do Canal Principal;1.44;;Canal sinuoso
+Comprimento do Canal Principal (Lc);372.78;km;Comprimento do canal principal
+Comprimento Total dos Canais (Lt);2092.94;km;Comprimento total de todos os canais
+Número de Fluxos (Nu);197;;Número total de fluxos
+Textura de Drenagem (Dt);0.19;;Textura de drenagem grossa
+Número de Infiltração (If);0;;Baixo número de infiltração, indicando alta infiltração
+Razão de Aptidão (Rf);0.35;;Razão de aptidão moderada
+Fator de Assimetria (Af);0.5;;Inclinação significativa para a direita (olhando para jusante)
+Coeficiente Orográfico (Oc);27684.27;;Alta influência orográfica
+Índice de Massividade;0.04;m/km²;Baixa massividade, indicando terreno relativamente plano
+Densidade de Junção;0.01;junções/km²;Baixa densidade de junções
+Coeficiente de Armazenamento;12.43;km;Capacidade de armazenamento moderada
+Integral Hipsométrica (HI);0.15;adimensional;Estágio antigo

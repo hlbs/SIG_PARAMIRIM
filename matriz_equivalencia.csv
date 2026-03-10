@@ -1,0 +1,21 @@
+Recurso atual;Componente/Serviço em React;Biblioteca;Status/Observações
+L.map / TileLayer (OSM, Humanitário, Esri, OTM);MapContainer, TileLayer, BaseMapSwitcher;react-leaflet / leaflet;"Direto; toggles via estado"
+Sidebar (acordeões);Sidebar, AccordionSection;React / CSS;Replicar UI/UX e ícones
+Vetores data/vetor/*.js;VectorLayer (GeoJSON);react-leaflet;"Converter para .geojson; manter atributos"
+Estilos temáticos (polígonos);styleFor*, GeoJSON style;React;Regras 1:1
+Drenagem (Strahler);VectorLayer + styleForDrenagem;react-leaflet;Peso/cor por ordem
+Pontos (poços/rede);VectorPointLayer + DivIcon;react-leaflet / leaflet;pointToLayer + Font Awesome
+Popups;GeoJSON onEachFeature;react-leaflet;Conteúdo HTML
+Panes/z-index;ensurePanes(map);leaflet;z-index por tema
+Legenda dinâmica;Legend;React;Reativo a camadas ativas
+Desenho/edição;DrawControl;leaflet.draw;Uso imperativo via useEffect
+Geocoder;GeocoderControl;leaflet-control-geocoder;Uso imperativo
+Locate;LocateControl;leaflet.locatecontrol;Uso imperativo
+Escala;ScaleControl;leaflet;L.control.scale()
+Raster;RasterLayer;georaster-layer-for-leaflet;pixelValuesToColorFn
+Basemap Switcher;BaseMapSwitcher;React;Reativo
+CSV da bacia;useBaciaCSV();papaparse;Hook para leitura
+Publicações locais;PublicationsLocal;React;Lista PDF/links
+Publicações (Scholar);searchScholar + fallbacks;fetch + backend;Requer backend/fallback
+Ícones;Font Awesome;@fortawesome;Consistência visual
+A11y/Responsivo;Semântico + ARIA;React/CSS;Teclado/leitores

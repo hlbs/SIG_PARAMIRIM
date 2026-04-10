@@ -32,7 +32,7 @@ jobs:
           SIAGAS_DETAIL_PATH: "layout/detalhe.php"
           SIAGAS_USER_AGENT: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
           LIMIT: "0"
-          SLEEP_SECONDS: "0.3"
+          SLEEP_SECONDS: "0.2"
         run: |
           python scripts/raspar_detalhes_siagas.py
 

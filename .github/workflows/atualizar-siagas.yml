@@ -1,15 +1,15 @@
-name: Atualizar dados SIAGAS Paramirim
+name: Atualizar detalhes SIAGAS
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "15 06 * * *"
+    - cron: "20 06 * * *"
 
 permissions:
   contents: write
 
 jobs:
-  atualizar:
+  atualizar-detalhes:
     runs-on: ubuntu-latest
 
     steps:
@@ -26,13 +26,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Executar coleta
+      - name: Executar raspagem dos detalhes
         env:
           SIAGAS_BASE_URL: "https://siagasweb.sgb.gov.br"
-          SIAGAS_SEARCH_PATH: "layout/pesquisa_coordenada.php"
+          SIAGAS_DETAIL_PATH: "layout/detalhe.php"
           SIAGAS_USER_AGENT: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
+          LIMIT: "0"
+          SLEEP_SECONDS: "0.3"
         run: |
-          python scripts/coletar_siagas.py
+          python scripts/raspar_detalhes_siagas.py
 
       - name: Commit dos arquivos atualizados
         run: |
@@ -40,5 +42,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add data/raw data/processed
-          git diff --staged --quiet || git commit -m "Atualização diária SIAGAS Paramirim"
+          git diff --staged --quiet || git commit -m "Atualização diária dos detalhes SIAGAS"
           git push

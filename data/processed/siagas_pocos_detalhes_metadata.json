@@ -1,0 +1,11 @@
+{
+  "updated_at_utc":"2026-04-10T14:35:18.141564+00:00",
+  "source_csv":"data\/db\/pocos_db.csv",
+  "total_codigos_lidos":630,
+  "total_registros_saida":630,
+  "success_count":630,
+  "error_count":0,
+  "html_dir":"data\/raw\/html_pocos",
+  "img_dir":"data\/raw\/imagens_pocos",
+  "output_csv":"data\/processed\/siagas_pocos_detalhes.csv"
+}

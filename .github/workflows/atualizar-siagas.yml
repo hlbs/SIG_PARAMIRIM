@@ -36,11 +36,55 @@ jobs:
         run: |
           python scripts/raspar_detalhes_siagas.py
 
-      - name: Commit dos arquivos atualizados
+      - name: Preparar pacotes para release
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p release_assets
 
-          git add data/raw data/processed
-          git diff --staged --quiet || git commit -m "Atualização diária dos detalhes SIAGAS"
-          git push
+          if [ -d "data/processed" ]; then
+            cp -r data/processed release_assets/processed
+            cd release_assets
+            zip -r siagas_processed.zip processed
+            cd ..
+          fi
+
+          if [ -d "data/raw/imagens_pocos" ]; then
+            cp -r data/raw/imagens_pocos release_assets/imagens_pocos
+            cd release_assets
+            zip -r siagas_imagens_pocos.zip imagens_pocos
+            cd ..
+          fi
+
+          if [ -d "data/raw/html_pocos" ]; then
+            cp -r data/raw/html_pocos release_assets/html_pocos
+            cd release_assets
+            zip -r siagas_html_pocos.zip html_pocos
+            cd ..
+          fi
+
+      - name: Criar release se não existir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="siagas-daily-latest"
+
+          gh release view "$TAG" >/dev/null 2>&1 || \
+          gh release create "$TAG" \
+            --title "SIAGAS Daily Latest" \
+            --notes "Release automática com os arquivos mais recentes do scraping do SIAGAS."
+
+      - name: Enviar assets para a release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="siagas-daily-latest"
+
+          FILES=""
+          [ -f "release_assets/siagas_processed.zip" ] && FILES="$FILES release_assets/siagas_processed.zip"
+          [ -f "release_assets/siagas_imagens_pocos.zip" ] && FILES="$FILES release_assets/siagas_imagens_pocos.zip"
+          [ -f "release_assets/siagas_html_pocos.zip" ] && FILES="$FILES release_assets/siagas_html_pocos.zip"
+
+          if [ -n "$FILES" ]; then
+            gh release upload "$TAG" $FILES --clobber
+          else
+            echo "Nenhum arquivo encontrado para enviar à release."
+          fi

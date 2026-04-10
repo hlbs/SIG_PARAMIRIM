@@ -5,14 +5,13 @@ import re
 import time
 import unicodedata
 from datetime import datetime, timezone
-from io import StringIO
 from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,9 +37,6 @@ LIMIT = int(os.getenv("LIMIT", "0"))
 SLEEP_SECONDS = float(os.getenv("SLEEP_SECONDS", "0.2"))
 
 
-# =========================
-# UTILITÁRIOS
-# =========================
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -56,8 +52,7 @@ def utc_stamp() -> str:
 def normalize_text(value: Any) -> str:
     if value is None:
         return ""
-    value = str(value)
-    value = value.replace("\xa0", " ")
+    value = str(value).replace("\xa0", " ")
     value = re.sub(r"\s+", " ", value).strip()
     return value
 
@@ -150,7 +145,7 @@ def load_codes_from_db(path: Path) -> list[str]:
     return unique_codes
 
 
-def rows_from_table(table) -> list[list[str]]:
+def rows_from_table(table: Tag) -> list[list[str]]:
     rows: list[list[str]] = []
     for tr in table.find_all("tr"):
         cells = tr.find_all(["th", "td"])
@@ -162,139 +157,36 @@ def rows_from_table(table) -> list[list[str]]:
     return rows
 
 
-def table_contains(rows: list[list[str]], text: str) -> bool:
+def find_tables(soup: BeautifulSoup) -> list[list[list[str]]]:
+    parsed: list[list[list[str]]] = []
+    for table in soup.find_all("table"):
+        rows = rows_from_table(table)
+        if rows:
+            parsed.append(rows)
+    return parsed
+
+
+def table_has_text(rows: list[list[str]], text: str) -> bool:
     text_norm = normalize_text(text).lower()
     for row in rows:
-        joined = " ".join(row).lower()
-        if text_norm in joined:
+        if text_norm in " ".join(row).lower():
             return True
     return False
 
 
-def is_block_title(row: list[str]) -> bool:
-    nonempty = [c for c in row if c]
-    if len(nonempty) != 1:
-        return False
-
-    txt = nonempty[0]
-    known_titles = {
-        "Dados Gerais:",
-        "Localização:",
-        "Situação:",
-        "Perfuração:",
-        "Diâmetro:",
-        "Revestimento:",
-        "Filtro:",
-        "Espaço Anular:",
-        "Boca do Tubo:",
-        "Entrada d'água:",
-        "Profundidade Útil:",
-        "Feição Geomorfológica:",
-        "Formação Geológica:",
-        "Dados Litológicos:",
-        "Aquífero no Ponto",
-        "Nível da Água:",
-        "Teste de Bombeamento:",
-        "Análises Químicas:",
-        "Resultados Analíticos da Última Coleta:",
-    }
-    return txt in known_titles or txt.endswith(":")
+def first_nonempty(row: list[str]) -> str:
+    for cell in row:
+        if normalize_text(cell):
+            return normalize_text(cell)
+    return ""
 
 
-def parse_pairs_from_row(row: list[str]) -> dict[str, str]:
-    out: dict[str, str] = {}
-    i = 0
-    while i < len(row):
-        label = normalize_text(row[i])
-        value = normalize_text(row[i + 1]) if i + 1 < len(row) else ""
-        if label.endswith(":"):
-            out[normalize_key(label)] = value
-            i += 2
-        else:
-            i += 1
-    return out
+def is_single_title_row(row: list[str]) -> bool:
+    nonempty = [normalize_text(c) for c in row if normalize_text(c)]
+    return len(nonempty) == 1
 
 
-def parse_key_value_sections(rows: list[list[str]]) -> dict[str, str]:
-    """
-    Para blocos como Gerais, Hidrogeologia, Teste de Bombeamento.
-    """
-    out: dict[str, str] = {}
-    current_section = None
-
-    for row in rows:
-        if is_block_title(row):
-            nonempty = [c for c in row if c]
-            current_section = normalize_key(nonempty[0])
-            continue
-
-        pairs = parse_pairs_from_row(row)
-        for key, value in pairs.items():
-            final_key = f"{current_section}__{key}" if current_section else key
-            out[final_key] = value
-
-    return out
-
-
-def find_table_after_title(rows: list[list[str]], title: str) -> tuple[list[str], list[list[str]]]:
-    """
-    Localiza um bloco do tipo:
-    Título:
-    cabeçalhos
-    valores...
-    """
-    for i, row in enumerate(rows):
-        nonempty = [c for c in row if c]
-        if len(nonempty) == 1 and nonempty[0] == title:
-            # primeira linha seguinte com conteúdo é header
-            j = i + 1
-            while j < len(rows) and not any(rows[j]):
-                j += 1
-            if j >= len(rows):
-                return [], []
-
-            headers = [normalize_key(c) for c in rows[j] if c]
-            data_rows: list[list[str]] = []
-            k = j + 1
-            while k < len(rows):
-                if is_block_title(rows[k]):
-                    break
-                if any(rows[k]):
-                    vals = [normalize_text(c) for c in rows[k] if c]
-                    if vals:
-                        data_rows.append(vals)
-                k += 1
-
-            return headers, data_rows
-
-    return [], []
-
-
-def to_records(
-    codigo_ponto: str,
-    headers: list[str],
-    data_rows: list[list[str]],
-    extra: dict[str, Any] | None = None,
-) -> list[dict[str, Any]]:
-    records: list[dict[str, Any]] = []
-    extra = extra or {}
-
-    for row in data_rows:
-        rec: dict[str, Any] = {"codigo_ponto": codigo_ponto, **extra}
-        padded = row + [""] * (len(headers) - len(row))
-        padded = padded[: len(headers)]
-
-        for h, v in zip(headers, padded):
-            rec[h] = v
-        records.append(rec)
-
-    return records
-
-
-# =========================
-# EXTRAÇÃO DO CABEÇALHO
-# =========================
-def extract_header_fields(soup: BeautifulSoup) -> dict[str, Any]:
+def parse_header_fields(soup: BeautifulSoup) -> dict[str, Any]:
     text = soup.get_text(" ", strip=True)
 
     patterns = {
@@ -311,98 +203,70 @@ def extract_header_fields(soup: BeautifulSoup) -> dict[str, Any]:
     return out
 
 
-# =========================
-# IMAGENS
-# =========================
-def save_inline_svg(codigo_ponto: str, container) -> tuple[str | None, str | None]:
-    svg = container.find("svg")
-    if svg is None:
-        return None, None
-
-    local_name = f"{sanitize_filename(codigo_ponto)}.svg"
-    local_path = RAW_IMG_DIR / local_name
-    save_text(local_path, str(svg))
-    return None, str(local_path.relative_to(ROOT))
-
-
-def save_profile_image(
-    session: requests.Session,
-    codigo_ponto: str,
-    soup: BeautifulSoup,
-    detail_url: str,
-) -> tuple[str | None, str | None]:
-    container = soup.find(id="svgContainer")
-    if container is None:
-        return None, None
-
-    src_url, local_path = save_inline_svg(codigo_ponto, container)
-    if local_path:
-        return src_url, local_path
-
-    img = container.find("img")
-    if img and img.get("src"):
-        src = urljoin(detail_url, img["src"])
-        ext = Path(urlparse(src).path).suffix or ".png"
-        local_name = f"{sanitize_filename(codigo_ponto)}{ext}"
-        local_file = RAW_IMG_DIR / local_name
-        download_file(session, src, local_file)
-        return src, str(local_file.relative_to(ROOT))
-
-    for tag_name in ["object", "embed", "iframe"]:
-        tag = container.find(tag_name)
-        candidate = None
-        if tag:
-            candidate = tag.get("data") or tag.get("src")
-        if candidate:
-            src = urljoin(detail_url, candidate)
-            ext = Path(urlparse(src).path).suffix or ".svg"
-            local_name = f"{sanitize_filename(codigo_ponto)}{ext}"
-            local_file = RAW_IMG_DIR / local_name
-            download_file(session, src, local_file)
-            return src, str(local_file.relative_to(ROOT))
-
-    return None, None
+def parse_pairs_in_row(row: list[str]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    i = 0
+    while i < len(row):
+        label = normalize_text(row[i])
+        value = normalize_text(row[i + 1]) if i + 1 < len(row) else ""
+        if label.endswith(":"):
+            out[normalize_key(label)] = value
+            i += 2
+        else:
+            i += 1
+    return out
 
 
-# =========================
-# PARSERS POR ABA
-# =========================
-def parse_gerais_table(codigo_ponto: str, rows: list[list[str]], header: dict[str, Any]) -> dict[str, Any]:
-    record = {"codigo_ponto": codigo_ponto, **header}
-    record.update(parse_key_value_sections(rows))
+def parse_gerais(rows: list[list[str]], codigo_ponto: str, header: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+    record = {"codigo_ponto": codigo_ponto, **header, **base}
+    current_block = ""
+
+    for row in rows:
+        if is_single_title_row(row):
+            current_block = normalize_key(first_nonempty(row))
+            continue
+
+        pairs = parse_pairs_in_row(row)
+        for k, v in pairs.items():
+            key = f"{current_block}__{k}" if current_block else k
+            record[key] = v
+
     return record
 
 
-def parse_construtivos_table(codigo_ponto: str, rows: list[list[str]]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    resumo = {"codigo_ponto": codigo_ponto}
+def parse_construtivos(rows: list[list[str]], codigo_ponto: str, base: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    resumo = {"codigo_ponto": codigo_ponto, **base}
     intervalos: list[dict[str, Any]] = []
 
-    current_block = None
+    block = ""
     i = 0
     while i < len(rows):
         row = rows[i]
-        nonempty = [c for c in row if c]
 
-        if is_block_title(row):
-            current_block = nonempty[0]
+        if is_single_title_row(row):
+            block = first_nonempty(row)
             i += 1
             continue
 
-        if current_block in {"Perfuração:", "Boca do Tubo:", "Profundidade Útil:"}:
-            resumo.update(
-                {f"{normalize_key(current_block)}__{k}": v for k, v in parse_pairs_from_row(row).items()}
-            )
+        if block in {"Perfuração:", "Boca do Tubo:", "Profundidade Útil:"}:
+            for k, v in parse_pairs_in_row(row).items():
+                resumo[f"{normalize_key(block)}__{k}"] = v
             i += 1
             continue
 
-        if current_block in {"Diâmetro:", "Revestimento:", "Filtro:", "Espaço Anular:", "Entrada d'água:"}:
-            headers = [normalize_key(c) for c in row if c]
-            block_name = normalize_key(current_block)
+        if block in {"Diâmetro:", "Revestimento:", "Filtro:", "Espaço Anular:", "Entrada d'água:"}:
+            headers = [normalize_key(c) for c in row if normalize_text(c)]
             i += 1
-            while i < len(rows) and not is_block_title(rows[i]):
-                vals = [normalize_text(c) for c in rows[i] if c]
+            while i < len(rows):
+                next_row = rows[i]
+                if is_single_title_row(next_row):
+                    break
+                vals = [normalize_text(c) for c in next_row if normalize_text(c)]
                 if vals:
-                    rec = {"codigo_ponto": codigo_ponto, "bloco": block_name}
+                    rec = {
+                        "codigo_ponto": codigo_ponto,
+                        "bloco": normalize_key(block),
+                    }
                     padded = vals + [""] * (len(headers) - len(vals))
                     padded = padded[: len(headers)]
                     for h, v in zip(headers, padded):
@@ -416,35 +280,35 @@ def parse_construtivos_table(codigo_ponto: str, rows: list[list[str]]) -> tuple[
     return resumo, intervalos
 
 
-def parse_geologicos_table(codigo_ponto: str, rows: list[list[str]]) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
-    resumo = {"codigo_ponto": codigo_ponto}
+def parse_geologicos(rows: list[list[str]], codigo_ponto: str, base: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+    resumo = {"codigo_ponto": codigo_ponto, **base}
     formacoes: list[dict[str, Any]] = []
     litologias: list[dict[str, Any]] = []
 
+    block = ""
     i = 0
-    current_block = None
-
     while i < len(rows):
         row = rows[i]
-        nonempty = [c for c in row if c]
 
-        if is_block_title(row):
-            current_block = nonempty[0]
+        if is_single_title_row(row):
+            block = first_nonempty(row)
             i += 1
             continue
 
-        if current_block == "Feição Geomorfológica:":
-            pairs = parse_pairs_from_row(row)
-            for k, v in pairs.items():
+        if block == "Feição Geomorfológica:":
+            for k, v in parse_pairs_in_row(row).items():
                 resumo[f"feicao_geomorfologica__{k}"] = v
             i += 1
             continue
 
-        if current_block == "Formação Geológica:":
-            headers = [normalize_key(c) for c in row if c]
+        if block == "Formação Geológica:":
+            headers = [normalize_key(c) for c in row if normalize_text(c)]
             i += 1
-            while i < len(rows) and not is_block_title(rows[i]):
-                vals = [normalize_text(c) for c in rows[i] if c]
+            while i < len(rows):
+                next_row = rows[i]
+                if is_single_title_row(next_row):
+                    break
+                vals = [normalize_text(c) for c in next_row if normalize_text(c)]
                 if vals:
                     rec = {"codigo_ponto": codigo_ponto}
                     padded = vals + [""] * (len(headers) - len(vals))
@@ -455,11 +319,14 @@ def parse_geologicos_table(codigo_ponto: str, rows: list[list[str]]) -> tuple[di
                 i += 1
             continue
 
-        if current_block == "Dados Litológicos:":
-            headers = [normalize_key(c) for c in row if c]
+        if block == "Dados Litológicos:":
+            headers = [normalize_key(c) for c in row if normalize_text(c)]
             i += 1
-            while i < len(rows) and not is_block_title(rows[i]):
-                vals = [normalize_text(c) for c in rows[i] if c]
+            while i < len(rows):
+                next_row = rows[i]
+                if is_single_title_row(next_row):
+                    break
+                vals = [normalize_text(c) for c in next_row if normalize_text(c)]
                 if vals:
                     rec = {"codigo_ponto": codigo_ponto}
                     padded = vals + [""] * (len(headers) - len(vals))
@@ -475,26 +342,20 @@ def parse_geologicos_table(codigo_ponto: str, rows: list[list[str]]) -> tuple[di
     return resumo, formacoes, litologias
 
 
-def parse_hidrogeologicos_table(codigo_ponto: str, rows: list[list[str]]) -> dict[str, Any]:
-    record = {"codigo_ponto": codigo_ponto}
-    current_block = None
+def parse_hidrogeologicos(rows: list[list[str]], codigo_ponto: str, base: dict[str, Any]) -> dict[str, Any]:
+    record = {"codigo_ponto": codigo_ponto, **base}
+    block = ""
 
     for row in rows:
-        nonempty = [c for c in row if c]
-
-        if is_block_title(row):
-            current_block = normalize_key(nonempty[0])
+        if is_single_title_row(row):
+            block = normalize_key(first_nonempty(row))
             continue
 
-        pairs = parse_pairs_from_row(row)
-        for k, v in pairs.items():
-            if current_block:
-                record[f"{current_block}__{k}"] = v
-            else:
-                record[k] = v
+        for k, v in parse_pairs_in_row(row).items():
+            key = f"{block}__{k}" if block else k
+            record[key] = v
 
-        # caso especial: "Aquífero: Fissural"
-        joined = " | ".join(nonempty)
+        joined = " | ".join([normalize_text(c) for c in row if normalize_text(c)])
         m = re.search(r"Aquífero:\s*(.+)", joined, flags=re.IGNORECASE)
         if m:
             record["aquifero_no_ponto__aquifero"] = normalize_text(m.group(1))
@@ -502,58 +363,177 @@ def parse_hidrogeologicos_table(codigo_ponto: str, rows: list[list[str]]) -> dic
     return record
 
 
-def parse_teste_bombeamento_table(codigo_ponto: str, rows: list[list[str]]) -> dict[str, Any]:
-    record = {"codigo_ponto": codigo_ponto}
-    record.update(parse_key_value_sections(rows))
+def parse_teste_bombeamento(rows: list[list[str]], codigo_ponto: str, base: dict[str, Any]) -> dict[str, Any]:
+    record = {"codigo_ponto": codigo_ponto, **base}
+    block = ""
+
+    for row in rows:
+        if is_single_title_row(row):
+            block = normalize_key(first_nonempty(row))
+            continue
+
+        for k, v in parse_pairs_in_row(row).items():
+            key = f"{block}__{k}" if block else k
+            record[key] = v
+
     return record
 
 
-def parse_analises_table(codigo_ponto: str, rows: list[list[str]]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    resumo = {"codigo_ponto": codigo_ponto}
+def parse_analises(rows: list[list[str]], codigo_ponto: str, base: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    resumo = {"codigo_ponto": codigo_ponto, **base}
     parametros: list[dict[str, Any]] = []
 
-    current_block = None
+    current_block = ""
     i = 0
-
     while i < len(rows):
         row = rows[i]
-        nonempty = [c for c in row if c]
+        joined = " ".join(row)
 
-        if is_block_title(row):
-            current_block = nonempty[0]
+        if is_single_title_row(row):
+            current_block = first_nonempty(row)
             i += 1
             continue
 
+        # bloco resumo
         if current_block == "Análises Químicas:":
-            pairs = parse_pairs_from_row(row)
-            for k, v in pairs.items():
+            # detecta início do subtipo de resultados
+            if "Parâmetro:" in joined or "Parâmetro" in joined and "Concentração:" in joined:
+                current_block = "Resultados Analíticos da Última Coleta:"
+                continue
+
+            for k, v in parse_pairs_in_row(row).items():
                 resumo[f"analises_quimicas__{k}"] = v
             i += 1
             continue
 
+        # bloco parâmetros
         if current_block == "Resultados Analíticos da Última Coleta:":
-            headers = [normalize_key(c) for c in row if c]
-            i += 1
-            while i < len(rows) and not is_block_title(rows[i]):
-                vals = [normalize_text(c) for c in rows[i] if c]
-                if vals:
-                    rec = {"codigo_ponto": codigo_ponto}
-                    padded = vals + [""] * (len(headers) - len(vals))
-                    padded = padded[: len(headers)]
-                    for h, v in zip(headers, padded):
-                        rec[h] = v
-                    parametros.append(rec)
+            header_cells = [normalize_text(c) for c in row if normalize_text(c)]
+
+            # cabeçalho esperado
+            if len(header_cells) >= 3 and (
+                "Parâmetro:" in header_cells[0] or "Parâmetro" in header_cells[0]
+            ):
                 i += 1
-            continue
+                while i < len(rows):
+                    next_row = rows[i]
+
+                    if is_single_title_row(next_row):
+                        break
+
+                    vals = [normalize_text(c) for c in next_row if normalize_text(c)]
+                    if not vals:
+                        i += 1
+                        continue
+
+                    # ignora início do gráfico
+                    joined_next = " ".join(vals).lower()
+                    if "gráfico de evolução" in joined_next or "grafico de evolucao" in joined_next:
+                        break
+
+                    if len(vals) >= 3:
+                        parametros.append(
+                            {
+                                "codigo_ponto": codigo_ponto,
+                                "parametro": vals[0],
+                                "concentracao": vals[1],
+                                "unidade": vals[2],
+                            }
+                        )
+                    elif len(vals) == 2:
+                        parametros.append(
+                            {
+                                "codigo_ponto": codigo_ponto,
+                                "parametro": vals[0],
+                                "concentracao": vals[1],
+                                "unidade": "",
+                            }
+                        )
+                    i += 1
+                continue
 
         i += 1
 
     return resumo, parametros
 
 
-# =========================
-# SCRAPING PRINCIPAL
-# =========================
+def collect_candidate_image_urls(soup: BeautifulSoup, detail_url: str) -> list[str]:
+    candidates: list[str] = []
+
+    for tag in soup.find_all(["img", "object", "embed", "iframe"]):
+        for attr in ["src", "data"]:
+            value = tag.get(attr)
+            if value:
+                candidates.append(urljoin(detail_url, value))
+
+    # tenta capturar URLs em scripts/HTML
+    html_text = str(soup)
+    patterns = [
+        r"""['"]([^'"]+\.(?:png|jpg|jpeg|gif|svg))['"]""",
+        r"""['"]([^'"]*(?:perfil|svgContainer|litolog|grafico|imagem)[^'"]*)['"]""",
+    ]
+    for pattern in patterns:
+        for match in re.findall(pattern, html_text, flags=re.IGNORECASE):
+            if match:
+                candidates.append(urljoin(detail_url, match))
+
+    # prioriza urls mais promissoras
+    scored: list[tuple[int, str]] = []
+    for url in candidates:
+        score = 0
+        low = url.lower()
+        if "perfil" in low:
+            score += 5
+        if "svg" in low:
+            score += 4
+        if "imagem" in low or "image" in low:
+            score += 2
+        if "icon" in low or "menu" in low:
+            score -= 5
+        scored.append((score, url))
+
+    # remove duplicados preservando ordem pela melhor pontuação
+    scored.sort(key=lambda x: x[0], reverse=True)
+    result: list[str] = []
+    seen = set()
+    for _, url in scored:
+        if url not in seen:
+            seen.add(url)
+            result.append(url)
+    return result
+
+
+def save_profile_image(session: requests.Session, codigo_ponto: str, soup: BeautifulSoup, detail_url: str) -> tuple[str, str]:
+    # 1) tenta svg inline em qualquer lugar da página
+    svg = soup.find("svg")
+    if svg is not None:
+        local_name = f"{sanitize_filename(codigo_ponto)}.svg"
+        local_path = RAW_IMG_DIR / local_name
+        save_text(local_path, str(svg))
+        return "", str(local_path.relative_to(ROOT))
+
+    # 2) tenta candidatos por tags/atributos/scripts
+    candidates = collect_candidate_image_urls(soup, detail_url)
+    for url in candidates:
+        try:
+            path_suffix = Path(urlparse(url).path).suffix.lower()
+            if path_suffix not in {".svg", ".png", ".jpg", ".jpeg", ".gif", ""}:
+                continue
+
+            ext = path_suffix if path_suffix else ".png"
+            local_name = f"{sanitize_filename(codigo_ponto)}{ext}"
+            local_path = RAW_IMG_DIR / local_name
+            download_file(session, url, local_path)
+
+            # evita salvar ícones minúsculos
+            if local_path.exists() and local_path.stat().st_size > 2000:
+                return url, str(local_path.relative_to(ROOT))
+        except Exception:
+            continue
+
+    return "", ""
+
+
 def scrape_well_detail(session: requests.Session, codigo_ponto: str) -> dict[str, Any]:
     detail_url = build_detail_url(codigo_ponto)
     html = fetch_html(session, detail_url)
@@ -562,9 +542,16 @@ def scrape_well_detail(session: requests.Session, codigo_ponto: str) -> dict[str
     save_text(html_path, html)
 
     soup = BeautifulSoup(html, "lxml")
-    tables = soup.find_all("table")
+    tables = find_tables(soup)
 
-    header = extract_header_fields(soup)
+    header = parse_header_fields(soup)
+
+    base = {
+        "url_detalhe": detail_url,
+        "html_local": str(html_path.relative_to(ROOT)),
+        "updated_at_utc": utc_now_iso(),
+    }
+
     imagem_url, imagem_local = save_profile_image(session, codigo_ponto, soup, detail_url)
 
     out: dict[str, Any] = {
@@ -580,65 +567,56 @@ def scrape_well_detail(session: requests.Session, codigo_ponto: str) -> dict[str
         "imagens": [],
     }
 
-    cadastro_base = {
-        "codigo_ponto": codigo_ponto,
-        "url_detalhe": detail_url,
-        "html_local": str(html_path.relative_to(ROOT)),
-        "imagem_origem_url": imagem_url,
-        "imagem_local": imagem_local,
-        "updated_at_utc": utc_now_iso(),
-    }
+    found_gerais = False
 
-    gerais_found = False
-
-    for table in tables:
-        rows = rows_from_table(table)
-        if not rows:
-            continue
-
-        if table_contains(rows, "Dados Gerais:"):
-            rec = parse_gerais_table(codigo_ponto, rows, header)
-            rec.update(cadastro_base)
+    for rows in tables:
+        if table_has_text(rows, "Dados Gerais:"):
+            rec = parse_gerais(rows, codigo_ponto, header, base)
+            rec["imagem_origem_url"] = imagem_url
+            rec["imagem_local"] = imagem_local
             out["cadastro"].append(rec)
-            gerais_found = True
+            found_gerais = True
             continue
 
-        if table_contains(rows, "Perfuração:"):
-            resumo, intervalos = parse_construtivos_table(codigo_ponto, rows)
-            resumo.update(cadastro_base)
+        if table_has_text(rows, "Perfuração:"):
+            resumo, intervalos = parse_construtivos(rows, codigo_ponto, base)
             out["construtivos_resumo"].append(resumo)
             out["construtivos_intervalos"].extend(intervalos)
             continue
 
-        if table_contains(rows, "Formação Geológica:") or table_contains(rows, "Dados Litológicos:"):
-            resumo, formacoes, litologias = parse_geologicos_table(codigo_ponto, rows)
-            if resumo and len(resumo) > 1:
+        if table_has_text(rows, "Formação Geológica:") or table_has_text(rows, "Dados Litológicos:"):
+            resumo, formacoes, litologias = parse_geologicos(rows, codigo_ponto, base)
+            if len(resumo) > 2:
+                # reservado caso queira usar depois
                 pass
             out["geologia_formacao"].extend(formacoes)
             out["geologia_litologia"].extend(litologias)
             continue
 
-        if table_contains(rows, "Aquífero no Ponto") or table_contains(rows, "Nível da Água:"):
-            rec = parse_hidrogeologicos_table(codigo_ponto, rows)
-            rec.update(cadastro_base)
+        if table_has_text(rows, "Aquífero no Ponto") or table_has_text(rows, "Nível da Água:"):
+            rec = parse_hidrogeologicos(rows, codigo_ponto, base)
             out["hidrogeologia"].append(rec)
             continue
 
-        if table_contains(rows, "Teste de Bombeamento:"):
-            rec = parse_teste_bombeamento_table(codigo_ponto, rows)
-            rec.update(cadastro_base)
+        if table_has_text(rows, "Teste de Bombeamento:"):
+            rec = parse_teste_bombeamento(rows, codigo_ponto, base)
             out["teste_bombeamento"].append(rec)
             continue
 
-        if table_contains(rows, "Análises Químicas:"):
-            resumo, parametros = parse_analises_table(codigo_ponto, rows)
-            resumo.update(cadastro_base)
+        if table_has_text(rows, "Análises Químicas:"):
+            resumo, parametros = parse_analises(rows, codigo_ponto, base)
             out["analises_resumo"].append(resumo)
             out["analises_parametros"].extend(parametros)
             continue
 
-    if not gerais_found:
-        rec = {"codigo_ponto": codigo_ponto, **header, **cadastro_base}
+    if not found_gerais:
+        rec = {
+            "codigo_ponto": codigo_ponto,
+            **header,
+            **base,
+            "imagem_origem_url": imagem_url,
+            "imagem_local": imagem_local,
+        }
         out["cadastro"].append(rec)
 
     out["imagens"].append(
@@ -656,11 +634,7 @@ def scrape_well_detail(session: requests.Session, codigo_ponto: str) -> dict[str
 
 
 def save_df(records: list[dict[str, Any]], path: Path) -> None:
-    if records:
-        df = pd.DataFrame(records)
-    else:
-        df = pd.DataFrame()
-
+    df = pd.DataFrame(records) if records else pd.DataFrame()
     df.to_csv(path, index=False, sep=";", encoding="utf-8-sig")
 
 

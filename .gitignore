@@ -1,0 +1,6 @@
+node_modules/
+.env
+*.pem
+dist/
+build/
+public/data/raster/mde_sirgas2000.tif
